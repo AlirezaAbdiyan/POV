@@ -108,7 +108,7 @@ void showTestRGB(void)
 uint32_t lastImageTime = 0L, // Time of last image change
          lastLineTime  = 0L;
 uint8_t  imageNumber   = 0,  // Current image being displayed
-         imagePixels[144*3]; // -> pixel data in PROGMEM
+         imagePixels[144*3]; // -> pixel data
 line_t   imageLines,         // Number of lines in active image
          imageLine;          // Current line number in image
 
@@ -156,7 +156,7 @@ bool imageInit_MMC(int image_number)
       Serial.print("LEDs=");
       Serial.println(LEDs);
       FastLED.clear(); // Make sure strip is clear
-      FastLED.show();  // before measuring battery      
+      FastLED.show();      
       ret=true;
     }
     else
