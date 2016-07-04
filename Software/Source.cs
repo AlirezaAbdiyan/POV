@@ -168,7 +168,7 @@ namespace RotateVideoDisplay
             }
             else
             {
-                MessageBox.Show("لطفا مقداری را وارد کنيد");
+                MessageBox.Show("Please enter a number...");
                 txtLEDsInABranch.Focus();
             }
         }
