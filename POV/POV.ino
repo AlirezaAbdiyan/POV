@@ -11,42 +11,46 @@
   by:AliReza.Abdiyan@gmail.com
 */
 
-#include <Arduino.h>
 #include <SPI.h>
 #include <FastLED.h>
 #include <SdFat.h>
-SdFat sd;
+SdFat SD;
+
+#define HalSensor 22    //Any pin teensy 3.1 (Use UGN3144)
+#define NUM_LEDS  144   //number of leds in strip length on one side
+#define DATA_PIN  7     //11 ,  7 = second hardware spi data
+#define CLOCK_PIN 14    //13 , 14 = second hardware spi clock
+
+#define CYCLE_TIME 15   // Time, in seconds, between auto-cycle images
+#define NUM_IMAGES 1
 
 const int chipSelect = SS;
 SdFile file;
 
-typedef uint16_t line_t;
-//const int IR_PIN = 23;  //Any pin teensy 3.1
-#define HalSensor 22    //Any pin teensy 3.1
-
-#define NUM_LEDS  144 //number of leds in strip length on one side
-#define DATA_PIN  7   //11 ,  7 = second hardware spi data
-#define CLOCK_PIN 14  //13 , 14 = second hardware spi clock
 CRGB leds[NUM_LEDS];
 
 boolean autoCycle = true; // Set to true to cycle images by default
-#define CYCLE_TIME 15     // Time, in seconds, between auto-cycle images
-
 char str[15],str_num[4],file_name[8];
 volatile uint8_t LEDs;
 volatile boolean OpenFile=true;
 volatile boolean file_ok=false;
 volatile uint32_t t_start_round=0,t_stop_round=0;
 
-void setup();
-void showTestRGB(void);
-void nextImage(void);
-void loop();
-bool imageInit_MMC(int image_number);
-void read_line(line_t Line);
-void Rotate_1_round(void);
+uint32_t lastImageTime = 0L, // Time of last image change
+         lastLineTime  = 0L;
+uint8_t  imageNumber   = 0,  // Current image being displayed
+         imagePixels[NUM_LEDS*3]; // -> pixel data in PROGMEM
+uint16_t imageLines,         // Number of lines in active image
+         imageLine;          // Current line number in image
+
+volatile bool Start_new_round=false;
+
+// Microseconds per line for various speed settings
+volatile uint32_t lineInterval      = 1000000L / 2500;
+volatile uint32_t lineInterval_temp;
 
 // -------------------------------------------------------------------------
+
 void setup() 
 {
   pinMode(SS,OUTPUT);
@@ -55,11 +59,10 @@ void setup()
   Serial.println("\nInitializing SD card...");
   
   // change to SPI_FULL_SPEED for more performance.
-  if (!sd.begin(chipSelect, SPI_FULL_SPEED)) //SPI_HALF_SPEED SPI_FULL_SPEED
+  while(!SD.begin(chipSelect, SPI_FULL_SPEED)) //SPI_HALF_SPEED SPI_FULL_SPEED
   {
-    sd.initErrorHalt();
     Serial.println("initialization failed!");
-    return;
+    delay(100);
   }
   Serial.println("initialization done");
 
@@ -72,7 +75,7 @@ void setup()
   showTestRGB();
   imageInit_MMC(0+1);
 
-  pinMode(HalSensor, INPUT); // sets the digital pin as input
+  pinMode(HalSensor, INPUT); 
   attachInterrupt(digitalPinToInterrupt(HalSensor), Rotate_1_round, FALLING);
 }
 
@@ -102,19 +105,6 @@ void showTestRGB(void)
   FastLED.clear();                               
   FastLED.show();  
 }
-
-// GLOBAL STATE STUFF ------------------------------------------------------
-
-uint32_t lastImageTime = 0L, // Time of last image change
-         lastLineTime  = 0L;
-uint8_t  imageNumber   = 0,  // Current image being displayed
-         imagePixels[144*3]; // -> pixel data
-line_t   imageLines,         // Number of lines in active image
-         imageLine;          // Current line number in image
-
-volatile bool Start_new_round=false;
-volatile uint32_t lineInterval;
-volatile uint32_t lineInterval_temp;
 
 void Rotate_1_round(void)
 {
@@ -156,7 +146,7 @@ bool imageInit_MMC(int image_number)
       Serial.print("LEDs=");
       Serial.println(LEDs);
       FastLED.clear(); // Make sure strip is clear
-      FastLED.show();      
+      FastLED.show();  // before measuring battery      
       ret=true;
     }
     else
@@ -173,7 +163,7 @@ bool imageInit_MMC(int image_number)
   return ret;
 }
 
-void read_line(line_t Line)
+void read_line(uint16_t Line)
 {
   if(Line==0)
   {
@@ -235,27 +225,39 @@ void nextImage(void)
   }  
 }
 
-// MAIN LOOP ---------------------------------------------------------------
+void prevImage(void) 
+{
+  imageNumber = imageNumber ? imageNumber - 1 : NUM_IMAGES - 1;
+  imageInit_MMC(imageNumber+1);
+}
+
 volatile uint32_t t;
 void loop() 
-{  
+{   
   if(autoCycle) 
   {
     t = millis(); // Current time, milliseconds       
     if((t - lastImageTime) >= (CYCLE_TIME * 1000L)) nextImage();
-    // CPU clocks vary slightly; multiple poi won't stay in perfect sync.
-    // Keep this in mind when using auto-cycle mode, you may want to cull
-    // the image selection to avoid unintentional regrettable combinations.
   }
+
   read_line(imageLine); 
   if(++imageLine >= imageLines) 
   {
     imageLine = 0; // Next scanline, wrap around    
     while(!Start_new_round);        
   }
+   
   if(!Start_new_round)
   {    
-    FastLED.show(); // Refresh LEDs        
+    if(!Start_new_round)
+    {
+      FastLED.show(); // Refresh LEDs        
+    }
+    else
+    {
+      Start_new_round=false;
+      imageLine=0;  
+    }
     while(((t =micros()) - lastLineTime) < lineInterval) if(Start_new_round) break;
   }
   else
@@ -263,6 +265,4 @@ void loop()
     Start_new_round=false;
   }  
   lastLineTime = micros();
-}//void loop() 
-
-
+}
