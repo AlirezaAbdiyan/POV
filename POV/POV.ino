@@ -17,7 +17,7 @@
 SdFat SD;
 
 #define HalSensor 22    //Any pin teensy 3.1 (Use UGN3144)
-#define NUM_LEDS  144   //number of leds in strip length on one side
+#define NUM_LEDS  144   //number of leds in strip
 #define DATA_PIN  7     //11 ,  7 = second hardware spi data
 #define CLOCK_PIN 14    //13 , 14 = second hardware spi clock
 
